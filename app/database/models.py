@@ -1,6 +1,16 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -59,3 +69,81 @@ class Resume(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="resume")
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+    __table_args__ = (UniqueConstraint("source", "external_id", name="uq_jobs_source_external_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    company: Mapped[str] = mapped_column(String, nullable=False)
+    location: Mapped[str | None] = mapped_column(String, nullable=True)
+    country: Mapped[str | None] = mapped_column(String, nullable=True)
+    remote: Mapped[bool] = mapped_column(Boolean, default=False)
+    salary: Mapped[str | None] = mapped_column(String, nullable=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
+    url: Mapped[str] = mapped_column(String, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    external_id: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    analyses: Mapped[list["JobAnalysis"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+    applications: Mapped[list["Application"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+    notifications: Mapped[list["Notification"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+
+
+class JobAnalysis(Base):
+    __tablename__ = "job_analysis"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    recommendation: Mapped[str] = mapped_column(String, nullable=False)
+    # recommendation: "APPLY" | "ANALYZE" | "IGNORE" (ver ai-engine.md)
+    positive_points: Mapped[list[str]] = mapped_column(JSON, default=list)
+    negative_points: Mapped[list[str]] = mapped_column(JSON, default=list)
+    raw_ai_response: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    job: Mapped["Job"] = relationship(back_populates="analyses")
+    user: Mapped["User"] = relationship()
+
+
+class Application(Base):
+    __tablename__ = "applications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String, default="not_applied")
+    # status: "not_applied" | "applied" | "interview" | "rejected" | "offer"
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    user: Mapped["User"] = relationship()
+    job: Mapped["Job"] = relationship(back_populates="applications")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (UniqueConstraint("user_id", "job_id", name="uq_notifications_user_job"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), nullable=False)
+    channel: Mapped[str] = mapped_column(String, default="telegram")
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    status: Mapped[str] = mapped_column(String, default="sent")
+    # status: "sent" | "failed"
+
+    user: Mapped["User"] = relationship()
+    job: Mapped["Job"] = relationship(back_populates="notifications")
