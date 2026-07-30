@@ -12,8 +12,9 @@ Visão completa do produto e arquitetura em [`docs/`](docs/):
 - [`development-guidelines.md`](development-guidelines.md) — regras de código
 - [`roadmap.md`](roadmap.md) — roadmap de produto
 - [`docs/development-plan.md`](docs/development-plan.md) — análise de arquitetura + plano de execução incremental
+- [`docs/po-backlog.md`](docs/po-backlog.md) — bloqueios e decisões pendentes (ex: lista de empresas a rastrear, credenciais reais)
 
-**Status atual:** Sprint 1 (Fundação) em andamento — estrutura de projeto, banco SQLite e modelos iniciais (`User`, `Profile`, `Resume`).
+**Status atual:** Fases 1–6 do `docs/development-plan.md` implementadas como scaffolding testado (29/29 testes, sem chamadas reais de API). Uso end-to-end em produção depende dos itens em `docs/po-backlog.md` (credenciais reais, lista de empresas, tecnologia de scheduler).
 
 ---
 
@@ -43,7 +44,7 @@ Gerenciamento de dependências e ambiente via [`uv`](https://docs.astral.sh/uv/)
    cp .env.example .env
    ```
 
-   Na Sprint 1, apenas `DATABASE_URL` é usada — `CLAUDE_API_KEY` e `TELEGRAM_TOKEN` só entram nas Fases 4 e 5.
+   `DATABASE_URL` é obrigatória. `CLAUDE_API_KEY`, `TELEGRAM_TOKEN` e `GREENHOUSE_BOARD_TOKENS` são opcionais — sem elas, `app/main.py` roda em modo degradado (loga e pula a etapa que depende da credencial faltante, sem quebrar). Ver [`docs/po-backlog.md`](docs/po-backlog.md).
 
 4. Aplique as migrations (cria `data/database.sqlite`):
 
@@ -57,25 +58,45 @@ Gerenciamento de dependências e ambiente via [`uv`](https://docs.astral.sh/uv/)
    uv run pytest
    ```
 
+6. Rode um ciclo completo (coleta → análise → notificação), com degradação graciosa se faltar credencial:
+
+   ```bash
+   uv run python -m app.main
+   ```
+
 ---
 
 ## Estrutura do projeto
 
 ```
 app/
-  config.py            # configuracao tipada (pydantic-settings)
+  main.py                    # entrypoint manual: coleta -> analise -> notificacao
+  config.py                  # configuracao tipada (pydantic-settings)
+  logging_config.py
   database/
-    database.py        # engine/session SQLAlchemy
-    models.py           # User, Profile, Resume (mais entidades nas proximas fases)
+    database.py               # engine/session SQLAlchemy
+    models.py                  # User, Profile, Resume, Job, JobAnalysis, Application, Notification
+  crawler/
+    base.py                    # BaseCrawler + JobDTO (contrato)
+    greenhouse.py               # GreenhouseCrawler (API JSON, sem Playwright)
+    runner.py                    # CrawlerRunner (isola falha por fonte)
+  ai/
+    context_builder.py          # User Context Engine
+    prompts.py
+    analyzer.py                  # chamada a Claude API (client injetavel)
+    scorer.py                     # validacao/normalizacao da resposta da IA
+  notifications/
+    telegram.py                  # TelegramNotifier (httpx direto)
+  services/
+    jobs_service.py               # dedup + persistencia de vagas
+    analysis_service.py            # persiste JobAnalysis (nunca sobrescreve)
+    notification_service.py         # dedup de notificacao + threshold por usuario
 data/
-  database.sqlite       # banco local (git-ignored)
-  resumes/               # curriculos dos usuarios (git-ignored)
-migrations/              # Alembic
-tests/
-  test_models.py
+  database.sqlite               # banco local (git-ignored)
+  resumes/                        # curriculos dos usuarios (git-ignored)
+migrations/                      # Alembic
+tests/                            # 29 testes, todos com mocks (sem chamadas reais de API)
 ```
-
-A estrutura completa planejada (crawlers, IA, notificações) está descrita em [`architecture.md`](architecture.md) §5 e será adicionada incrementalmente conforme [`docs/development-plan.md`](docs/development-plan.md).
 
 ---
 

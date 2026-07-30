@@ -53,6 +53,8 @@ class Profile(Base):
     salary_expectation: Mapped[str | None] = mapped_column(String, nullable=True)
     remote_preference: Mapped[str | None] = mapped_column(String, nullable=True)
     # remote_preference: "remote" | "hybrid" | "onsite" | "any" (ver database-design.md 3.2)
+    notification_score_threshold: Mapped[float] = mapped_column(Float, default=80.0)
+    # score minimo (0-100) para o usuario ser notificado (ver roadmap.md Fase 5)
 
     user: Mapped["User"] = relationship(back_populates="profile")
 
