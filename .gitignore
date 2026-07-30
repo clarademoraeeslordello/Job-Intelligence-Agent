@@ -1,0 +1,17 @@
+# Ambiente
+.venv/
+__pycache__/
+*.pyc
+
+# Segredos
+.env
+
+# Dados do usuario (curriculos, banco local)
+data/*.sqlite
+data/resumes/*
+!data/resumes/.gitkeep
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store

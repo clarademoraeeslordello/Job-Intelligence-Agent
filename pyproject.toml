@@ -1,0 +1,20 @@
+[project]
+name = "job-intelligence-agent"
+version = "0.1.0"
+description = "Agente de IA que busca vagas, entende o perfil do usuario e recomenda oportunidades compativeis."
+requires-python = ">=3.13"
+dependencies = [
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pydantic-settings>=2.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "black>=24.0",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py313"]
