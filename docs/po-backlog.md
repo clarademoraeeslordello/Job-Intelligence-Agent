@@ -1,120 +1,101 @@
 # PO Backlog — Bloqueios e Decisões Pendentes
 
-**Como usar:** cada item abaixo é algo que depende de decisão ou ação da Clara para avançar de "scaffolding testado" para "uso real em produção". Nada aqui bloqueou o desenvolvimento — o código segue funcional e testado (35/35 testes passando).
+**Como usar:** cada item abaixo é algo que depende de decisão ou ação da Clara para avançar de "scaffolding testado" para "uso real em produção". Nada aqui bloqueou o desenvolvimento — o código segue funcional e testado (38/38 testes passando).
 
 ---
 
 ## ✅ Resolvido — Busca abrangente (sem lista de empresas)
 
-Você não quer curar uma lista de empresas — quer cobertura ampla, sem esforço manual. `GreenhouseCrawler` continua existindo (útil se um dia você quiser rastrear uma empresa específica), mas o crawler principal agora é `ArbeitnowCrawler` (`app/crawler/arbeitnow.py`): API pública e gratuita, sem autenticação, que agrega vagas de múltiplas fontes/países, sem precisar de nenhuma configuração. Ele já filtra automaticamente para trazer só vagas publicadas nas últimas 48h (`lookback_hours=48` — a folga de 48h em vez de 24h é para tolerar atraso entre execuções diárias sem perder vaga). Roda sempre, incondicionalmente, em `app/main.py`.
+Duas fontes agregadoras rodam sempre, sem precisar de configuração:
 
-**Limitação a saber:** nenhuma fonte agregadora cobre 100% do mercado (LinkedIn e Indeed, por exemplo, não têm API pública aberta e bloqueiam scraping agressivamente — por isso não estão nas fontes). Cobertura "bem abrangente" aqui significa múltiplas fontes públicas somadas ao longo do tempo, não uma fonte única universal. Se quiser, dá pra somar mais agregadores depois (ex: RemoteOK).
+- `ArbeitnowCrawler` (`app/crawler/arbeitnow.py`) — API pública, vagas de múltiplas fontes/países.
+- `RemoteOKCrawler` (`app/crawler/remoteok.py`) — API pública, 100% focada em vagas remotas (adicionada depois que você confirmou que quer só remoto).
+
+Ambas filtram para trazer só vagas publicadas nas últimas 48h (folga de 48h em vez de 24h para tolerar atraso entre execuções diárias sem perder vaga). `GreenhouseCrawler` continua existindo, mas é opcional (só roda se você configurar `GREENHOUSE_BOARD_TOKENS`).
+
+**Limitação a saber:** LinkedIn e Indeed não têm API pública aberta e bloqueiam scraping — não estão nas fontes. "Bem abrangente" aqui significa múltiplas fontes públicas somadas, não uma fonte única universal.
 
 ## ✅ Resolvido — Tecnologia de scheduler
 
-**GitHub Actions**, confirmado por você — gratuito (repo público), roda na nuvem, não depende do seu PC ligado. Implementado em `.github/workflows/daily-run.yml`, agendado para rodar todo dia às 09:00 UTC (06:00 horário de Brasília). Pode ser disparado manualmente também (aba **Actions** → **Busca diaria de vagas** → **Run workflow**).
+**GitHub Actions**, confirmado por você. `.github/workflows/daily-run.yml`, todo dia às 09:00 UTC (06:00 BRT), ou manual (aba **Actions** → **Busca diaria de vagas** → **Run workflow**). Banco SQLite persiste entre execuções via `actions/cache` (nunca commitado no git — repo é público e o banco guarda currículo/salário).
 
-**Decisão técnica importante:** o banco SQLite não pode ser commitado no git (repo é público, e o banco guarda currículo/salário/dados pessoais — commitar isso no histórico do git seria um vazamento permanente). Em vez disso, o banco persiste entre execuções via `actions/cache` (armazenamento interno do GitHub Actions, não navegável publicamente, nunca aparece no código-fonte do repositório).
+## ✅ Resolvido — Critérios de elegibilidade (a partir do seu currículo)
 
-## 🔴 Ação sua — Criar as credenciais
+Você pediu: remoto, inglês intermediário, aceita brasileiros, CLT ou PJ. Implementei:
 
-Nenhuma dessas eu posso criar por você (são contas/chaves pessoais). Passo a passo:
+- `Profile.employment_types` (novo campo) — tipos de contratação aceitos (`CLT`, `PJ`, `Cooperativa` — mantive os termos brasileiros no dado, mas o prompt da IA explica a equivalência internacional: CLT ~ full-time employment, PJ ~ independent contractor/freelance).
+- `Profile.requires_brazil_eligible` (novo campo, `True` no seu perfil) — instrui a IA a marcar como `IGNORE` vagas remotas explicitamente restritas a candidatos de outro país/região.
+- `app/ai/prompts.py` — critérios eliminatórios: nível de inglês exigido acima do seu (intermediário) só derruba a vaga se for requisito **explícito e obrigatório** (não aplica a "diferencial"); tipo de contratação só derruba se a vaga for **explícita** sobre isso (a maioria não é).
+
+Migration aplicada localmente (`183219bc0847` → `da4baa756e6d`).
+
+## ✅ Resolvido — Seu perfil já está cadastrado
+
+Li seu currículo (`Clara de Moraes Lordello.pdf`, anexado por você) e criei os secrets `USER_NAME`, `USER_EMAIL`, `PROFILE_JSON` e `RESUME_JSON` diretamente no repositório (via `gh secret set` — nunca aparecem em log nem no código). Testei localmente rodando `python -m app.seed` com esses mesmos dados — funcionou, usuário criado com `employment_types=['CLT', 'PJ', 'Cooperativa']`, `requires_brazil_eligible=True`, 43 skills extraídas do currículo.
+
+**Importante — isso ainda não está no ambiente do GitHub Actions.** O banco local (`data/database.sqlite`, na sua máquina) e o banco cacheado no GitHub Actions são arquivos diferentes. Assim que você criar `CLAUDE_API_KEY` e `TELEGRAM_TOKEN` (únicos itens que faltam, ver abaixo), rode o workflow **Cadastrar/atualizar usuario** uma vez (aba Actions) para popular o banco de produção com o mesmo perfil.
+
+Se algo no seu perfil ficou errado ou incompleto (nível de senioridade, expectativa salarial não perguntei, cargo, etc.), me avise que eu ajusto o secret.
+
+## 🔴 Ação sua — As 3 únicas coisas que faltam
+
+Não posso criar nenhuma dessas por você (contas/credenciais pessoais).
 
 ### 1. Claude API Key
-
-1. Acesse [console.anthropic.com](https://console.anthropic.com) e faça login/cadastro.
-2. Vá em **API Keys** → **Create Key**.
-3. Copie a chave (só aparece uma vez).
+1. [console.anthropic.com](https://console.anthropic.com) → login/cadastro → **API Keys** → **Create Key**.
+2. Copie a chave.
 
 ### 2. Telegram Bot Token
+1. No Telegram, fale com **@BotFather** → `/newbot` → escolha nome e username (termina em `bot`).
+2. Ele devolve um token `123456:ABC-DEF...`.
 
-1. No Telegram, procure **@BotFather** e inicie uma conversa.
-2. Envie `/newbot`, escolha um nome e um username (precisa terminar em `bot`, ex: `job_intelligence_clara_bot`).
-3. O BotFather devolve um token no formato `123456:ABC-DEF...` — isso é o `TELEGRAM_TOKEN`.
+### 3. Seu Telegram Chat ID
+1. No Telegram, fale com **@userinfobot** → ele responde na hora com seu `chat_id`.
+2. Se sua mãe/esposa forem usar depois, cada uma repete esse passo e também precisa iniciar conversa com o bot criado no passo 2 (exigência de segurança do Telegram).
 
-### 3. Telegram Chat ID (seu e de quem mais for usar)
+### Cadastrar como GitHub Secrets
 
-1. No Telegram, procure **@userinfobot** e inicie uma conversa com ele — ele responde na hora com seu `chat_id` (um número).
-2. Repita para cada pessoa que vai usar (você, sua mãe, sua esposa) — cada uma precisa iniciar uma conversa com o bot que você criou no passo 2 antes de poder receber mensagens dele (o Telegram exige isso por segurança).
-
-### 4. Cadastrar tudo como GitHub Secrets/Variables (nunca no código ou no `.env` commitado)
-
-No repositório, vá em **Settings → Secrets and variables → Actions**.
-
-**Em "Secrets" (valores nunca aparecem em log, nem pra você depois de salvos):**
+**Settings → Secrets and variables → Actions → Secrets**, adicionar:
 
 | Nome | Valor |
 |---|---|
-| `CLAUDE_API_KEY` | a chave do passo 1 |
-| `TELEGRAM_TOKEN` | o token do passo 2 |
-| `USER_NAME` | seu nome |
-| `USER_EMAIL` | seu email |
-| `USER_TELEGRAM_CHAT_ID` | seu chat_id do passo 3 |
-| `PROFILE_JSON` | ver formato abaixo |
-| `RESUME_JSON` | ver formato abaixo |
+| `CLAUDE_API_KEY` | chave do passo 1 |
+| `TELEGRAM_TOKEN` | token do passo 2 |
+| `USER_TELEGRAM_CHAT_ID` | chat_id do passo 3 |
 
-**Em "Variables" (não sensível, pode aparecer em log):**
+(`USER_NAME`, `USER_EMAIL`, `PROFILE_JSON`, `RESUME_JSON` já estão configurados — não precisa mexer, a menos que queira corrigir algo do perfil.)
 
-| Nome | Valor |
-|---|---|
-| `GREENHOUSE_BOARD_TOKENS` | opcional, vazio por padrão |
+### Depois disso
 
-**Formato de `PROFILE_JSON`** (todos os campos opcionais):
-```json
-{
-  "headline": "Product Manager Senior",
-  "summary": "8 anos de experiencia em produtos B2B SaaS",
-  "years_experience": 8,
-  "desired_roles": ["Product Manager", "Head of Product"],
-  "desired_locations": ["Remoto", "Suecia"],
-  "languages": ["Portugues", "Ingles"],
-  "salary_expectation": "€60k-80k",
-  "remote_preference": "remote",
-  "notification_score_threshold": 75
-}
-```
-
-**Formato de `RESUME_JSON`:**
-```json
-{
-  "skills": ["product management", "sql", "figma"],
-  "experience": [{"empresa": "...", "cargo": "...", "periodo": "..."}],
-  "education": [{"curso": "...", "instituicao": "..."}],
-  "languages": ["Portugues nativo", "Ingles fluente"]
-}
-```
-
-### 5. Rodar o cadastro
-
-Depois de salvar os secrets: aba **Actions** → **Cadastrar/atualizar usuario** → **Run workflow**. Roda uma vez, cria seu usuário no banco. Repita sempre que quiser atualizar perfil/currículo (é upsert — não duplica).
-
-Depois disso, `daily-run.yml` já vai te notificar automaticamente todo dia, se houver vaga com score acima do seu `notification_score_threshold`.
+Aba **Actions** → **Cadastrar/atualizar usuario** → **Run workflow** (uma vez, popula o banco de produção). A partir daí, `daily-run.yml` já roda sozinho todo dia e te notifica no Telegram quando o score passar de 75 (seu `notification_score_threshold`).
 
 ---
 
 ## Pendências de menor prioridade (não bloqueiam)
 
-### `resume_parser.py` (PDF → JSON) não implementado
+### `resume_parser.py` (PDF → JSON automático) não implementado
 
-Hoje o currículo entra como JSON estruturado (`RESUME_JSON`, ver acima), preenchido manualmente. Parsing automático de PDF fica pra depois — não bloqueia o uso real, só exige que você monte o JSON uma vez.
+Seu currículo eu li manualmente e estruturei no `RESUME_JSON`. Um parser automático (PDF → texto → JSON via IA) seria útil se sua mãe/esposa forem usar depois e você não quiser fazer esse trabalho manual de novo — fica como próximo passo natural, não bloqueia seu uso agora.
 
 ### Nome de exibição da empresa (Greenhouse)
 
-`GreenhouseCrawler` (usado só se você configurar `GREENHOUSE_BOARD_TOKENS`) usa o board token como nome da empresa em vez do nome real. Baixa prioridade.
+Só relevante se você um dia configurar `GREENHOUSE_BOARD_TOKENS`. Baixa prioridade.
 
 ### Telegram via `httpx` direto, não `python-telegram-bot`
 
-Decisão técnica já tomada: o SDK oficial é assíncrono, o que quebraria a consistência do codebase síncrono. `TelegramNotifier` usa `httpx` direto (mesma lib dos crawlers), testável sem rede real.
+Decisão técnica já tomada: SDK oficial é assíncrono, quebraria a consistência do codebase síncrono.
 
 ---
 
 ## Resumo do que já está pronto e testado
 
-- Fase 2 — Crawler engine (`BaseCrawler`, `JobDTO`, `GreenhouseCrawler`, `ArbeitnowCrawler`, `CrawlerRunner`, dedup).
+- Fase 2 — `BaseCrawler`, `JobDTO`, `ArbeitnowCrawler`, `RemoteOKCrawler`, `GreenhouseCrawler`, `CrawlerRunner`, dedup.
 - Fase 3 — Schema completo (`Job`, `JobAnalysis`, `Application`, `Notification`) + `JobsService`.
-- Fase 4 — `context_builder`, `prompts`, `analyzer`, `scorer` — testado com client Claude mockado.
+- Fase 4 — `context_builder`, `prompts` (com critérios de elegibilidade), `analyzer`, `scorer` — testado com client Claude mockado.
 - Fase 5 — `telegram.py` + `notification_service.py` — dedup, threshold configurável — testado com client mockado.
 - Fase 6 — teste dedicado (`test_multiuser_isolation.py`) comprovando isolamento entre usuários.
-- Scheduler — `.github/workflows/daily-run.yml` (diário) + `seed-user.yml` (cadastro manual, dados sensíveis via Secrets).
+- Scheduler — `daily-run.yml` (diário) + `seed-user.yml` (cadastro, via Secrets).
+- CI — `.github/workflows/ci.yml` roda testes + lint em todo push/PR; `dependabot.yml` mantém dependências atualizadas.
+- Seu perfil real já está nos Secrets do repositório, testado localmente.
 
-**35/35 testes passando, `black` sem alterações necessárias.**
+**38/38 testes passando, `black` sem alterações necessárias.**
