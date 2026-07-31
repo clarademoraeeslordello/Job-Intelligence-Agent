@@ -4,6 +4,21 @@
 
 ---
 
+## ✅ Resolvido — Elegibilidade não podia ser hardcoded pro Brasil
+
+**Achado real (bug):** `app/ai/prompts.py` tinha o texto "exclui o Brasil" fixo no código do critério eliminatório de elegibilidade — funcionava só por acidente pro seu caso anterior, mas quebraria assim que você (ou qualquer outro usuário) tivesse uma situação diferente. Corrigido para ser genérico: o critério agora referencia "nacionalidade, localização e situação de elegibilidade do candidato descritas no contexto", que vem do `Profile.summary` de cada usuário — funciona pra qualquer nacionalidade/situação, não só Brasil.
+
+**Seu perfil atualizado** (você mencionou: indo pra Espanha, autorização de trabalho na UE só em fevereiro/2026, busca mundial):
+- `requires_brazil_eligible` → `false` (não fazia mais sentido travar só no Brasil)
+- `desired_locations` → adicionado `Worldwide` e `Spain`
+- `summary` → adicionei a frase explicando sua situação (cidadã brasileira, se mudando pra Espanha, sem autorização UE ainda, busca vagas remotas mundiais que não exijam autorização de um país específico que você não tem)
+
+## 📌 Sinal de produto a validar com você (não implementei nada ainda)
+
+Você comentou: *"pode ser que pessoas comprem esse produto... podem estar em qualquer lugar do mundo e quererem vagas de qualquer lugar do mundo"*. Isso é maior que o escopo atual (hoje é 1 perfil por env vars/Secrets, pensado pra você + família — ver `product-requirements.md`, "Fase inicial: uso pessoal"). Se a intenção é virar um produto vendável pra terceiros, isso é a Fase 3/4 do `roadmap.md` (Multiusuário/SaaS: cadastro próprio, login self-service, billing) — um salto de arquitetura real, não um ajuste pequeno. Não comecei a construir isso sem confirmar com você primeiro. Quando quiser, me diga se é pra eu já escopar isso como próxima iniciativa grande.
+
+---
+
 ## ✅ Resolvido — Frontend (login + backoffice de acesso)
 
 Implementado em `app/web/`: tela de login e backoffice onde um admin cria acesso para novos usuários (gera senha temporária, mostrada uma única vez) e revoga/restaura acesso sem apagar o histórico da pessoa. Testado com 10 testes automatizados + verificação visual real no navegador (desktop e mobile 375px — tabela vira lista de cards no mobile, sem scroll horizontal).
