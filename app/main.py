@@ -1,6 +1,7 @@
 import logging
 
 import anthropic
+from sqlalchemy.orm import Session
 
 from app.ai.analyzer import Analyzer
 from app.config import settings
@@ -16,6 +17,29 @@ from app.services.analysis_service import analyze_job_for_user
 from app.services.notification_service import notify_user_about_job
 
 logger = logging.getLogger(__name__)
+
+
+def process_users_and_jobs(
+    session: Session, analyzer: Analyzer, notifier: TelegramNotifier | None
+) -> None:
+    """Para cada (usuario, vaga) ainda nao analisado, gera a analise e, se houver
+    notifier configurado, notifica. Extraido de run_once() para ser testavel com
+    dependencias injetadas (fakes), sem precisar de credenciais reais nos testes.
+    """
+    users = session.query(User).all()
+    jobs = session.query(Job).all()
+
+    for user in users:
+        for job in jobs:
+            already_analyzed = any(a.user_id == user.id for a in job.analyses)
+            if already_analyzed:
+                continue
+
+            analysis = analyze_job_for_user(session, analyzer, user, job)
+            if analysis is None or notifier is None:
+                continue
+
+            notify_user_about_job(session, notifier, user, job, analysis)
 
 
 def run_once() -> None:
@@ -44,20 +68,7 @@ def run_once() -> None:
         if notifier is None:
             logger.warning("TELEGRAM_TOKEN nao configurado - analises serao geradas sem notificar")
 
-        users = session.query(User).all()
-        jobs = session.query(Job).all()
-
-        for user in users:
-            for job in jobs:
-                already_analyzed = any(a.user_id == user.id for a in job.analyses)
-                if already_analyzed:
-                    continue
-
-                analysis = analyze_job_for_user(session, analyzer, user, job)
-                if analysis is None or notifier is None:
-                    continue
-
-                notify_user_about_job(session, notifier, user, job, analysis)
+        process_users_and_jobs(session, analyzer, notifier)
     finally:
         session.close()
 
