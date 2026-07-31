@@ -1,0 +1,148 @@
+:root {
+  --bg: #0f1115;
+  --surface: #171a21;
+  --border: #2a2e38;
+  --text: #e8e9ec;
+  --muted: #9aa0ab;
+  --primary: #4f8cff;
+  --ok: #2fbf71;
+  --error: #ef4444;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand { font-weight: 600; }
+
+.link, a { color: var(--primary); text-decoration: none; }
+.link:hover, a:hover { text-decoration: underline; }
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.card-narrow { max-width: 420px; }
+
+form { display: flex; flex-direction: column; gap: 0.5rem; }
+
+label { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
+
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.6rem 0.7rem;
+  font-size: 1rem;
+  width: 100%;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+  margin-top: 0.75rem;
+}
+.checkbox-label input { width: auto; }
+
+.btn {
+  border: none;
+  border-radius: 6px;
+  padding: 0.65rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn-primary { background: var(--primary); color: #fff; margin-top: 0.75rem; }
+.btn-small { background: var(--border); color: var(--text); padding: 0.4rem 0.7rem; font-size: 0.85rem; }
+
+.alert { padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+.alert-success { background: rgba(47, 191, 113, 0.15); color: var(--ok); }
+.alert-error { background: rgba(239, 68, 68, 0.15); color: var(--error); }
+
+code {
+  background: var(--bg);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.95em;
+}
+
+.muted { color: var(--muted); font-size: 0.85rem; }
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+.badge-ok { background: rgba(47, 191, 113, 0.15); color: var(--ok); }
+.badge-off { background: rgba(239, 68, 68, 0.15); color: var(--error); }
+
+/* Tabela: vira lista de cards em telas pequenas (mobile), vira tabela normal a partir de 640px */
+.table-scroll { width: 100%; }
+
+.table { width: 100%; border-collapse: collapse; }
+
+@media (max-width: 640px) {
+  .table thead { display: none; }
+  .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+  .table tr {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.35rem 0;
+    border: none;
+  }
+  .table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+}
+
+@media (min-width: 641px) {
+  .table th, .table td {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+}

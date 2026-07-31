@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     # Ex: "spotify,notion,figma". Vazio ate a lista de empresas ser definida (ver PO backlog).
     greenhouse_board_tokens_raw: str = ""
 
+    # Chave para assinar o cookie de sessao do backoffice web (app/web/).
+    # O valor padrao SO serve para desenvolvimento local - producao DEVE definir
+    # SESSION_SECRET_KEY via GitHub Secret (ver docs/po-backlog.md).
+    session_secret_key: str = "dev-only-insecure-secret-troque-em-producao"
+
     @property
     def greenhouse_board_tokens(self) -> list[str]:
         return [t.strip() for t in self.greenhouse_board_tokens_raw.split(",") if t.strip()]

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "uvicorn", "app.web.app:app", "--reload", "--port", "8010"],
+      "port": 8010
+    }
+  ]
+}

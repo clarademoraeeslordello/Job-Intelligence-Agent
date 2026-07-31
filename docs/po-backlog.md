@@ -1,6 +1,24 @@
 # PO Backlog — Bloqueios e Decisões Pendentes
 
-**Como usar:** cada item abaixo é algo que depende de decisão ou ação da Clara para avançar de "scaffolding testado" para "uso real em produção". Nada aqui bloqueou o desenvolvimento — o código segue funcional e testado (38/38 testes passando).
+**Como usar:** cada item abaixo é algo que depende de decisão ou ação da Clara para avançar de "scaffolding testado" para "uso real em produção". Nada aqui bloqueou o desenvolvimento — o código segue funcional e testado (54/54 testes passando).
+
+---
+
+## ✅ Resolvido — Frontend (login + backoffice de acesso)
+
+Implementado em `app/web/`: tela de login e backoffice onde um admin cria acesso para novos usuários (gera senha temporária, mostrada uma única vez) e revoga/restaura acesso sem apagar o histórico da pessoa. Testado com 10 testes automatizados + verificação visual real no navegador (desktop e mobile 375px — tabela vira lista de cards no mobile, sem scroll horizontal).
+
+**Decisão técnica: FastAPI + Jinja2 (server-rendered), não React/Next.js.** O resto do projeto é 100% Python; duas telas não justificam introduzir um toolchain JS/Node separado (build, bundler, etc.) — FastAPI + templates HTML com CSS responsivo (mobile-first, sem framework CSS externo) entrega o mesmo resultado com uma stack só, mais simples de manter. Se o produto crescer bastante (dashboard complexo, muitas telas), migrar para uma SPA pode valer a pena — não é o caso hoje.
+
+**Segurança implementada:** senha com `bcrypt` (nunca texto puro), cookie de sessão assinado (`itsdangerous`, expira em 14 dias, `httponly` + `samesite=lax`), admin não consegue revogar o próprio acesso (evita lockout). **Simplificação assumida:** sem proteção CSRF explícita — risco baixo para uso pessoal/familiar (poucos usuários, sem conteúdo de terceiros), mas se isso virar algo maior/público, precisa de hardening antes.
+
+**🔴 Ação sua — falta decidir onde hospedar.** GitHub Actions (usado para a busca diária) só roda tarefas agendadas — não serve para manter um site no ar o tempo todo. Preciso que você escolha:
+- **Railway** — você já tem conta (projeto ARS/PICC), mas seria um projeto novo e separado lá, com custo próprio; ou
+- **Render / Fly.io** — têm free tier para apps pequenos, conta nova seria necessária.
+
+Não criei conta em nenhum desses por você (decisão de custo/plataforma que só você pode tomar). O app roda localmente hoje via `uv run uvicorn app.web.app:app` — assim que escolher a plataforma, é um deploy direto (Dockerfile pode ser adicionado se necessário).
+
+**Como criar o primeiro admin (você) depois de hospedar:** ainda não existe uma tela de "primeiro acesso" — defina manualmente `is_admin=True` e uma senha (`app.web.security.hash_password`) no seu usuário via script, do mesmo jeito que fiz para testar localmente. Se preferir, posso construir uma tela/CLI de bootstrap do primeiro admin — me avise.
 
 ---
 
@@ -63,7 +81,7 @@ Não posso criar nenhuma dessas por você (contas/credenciais pessoais).
 | `TELEGRAM_TOKEN` | token do passo 2 |
 | `USER_TELEGRAM_CHAT_ID` | chat_id do passo 3 |
 
-(`USER_NAME`, `USER_EMAIL`, `PROFILE_JSON`, `RESUME_JSON` já estão configurados — não precisa mexer, a menos que queira corrigir algo do perfil.)
+(`USER_NAME`, `USER_EMAIL`, `PROFILE_JSON`, `RESUME_JSON` e `SESSION_SECRET_KEY` já estão configurados — não precisa mexer, a menos que queira corrigir algo do perfil.)
 
 ### Depois disso
 
@@ -97,5 +115,6 @@ Decisão técnica já tomada: SDK oficial é assíncrono, quebraria a consistên
 - Scheduler — `daily-run.yml` (diário) + `seed-user.yml` (cadastro, via Secrets).
 - CI — `.github/workflows/ci.yml` roda testes + lint em todo push/PR; `dependabot.yml` mantém dependências atualizadas.
 - Seu perfil real já está nos Secrets do repositório, testado localmente.
+- Frontend — `app/web/` (login + backoffice de acesso), responsivo, testado e verificado visualmente.
 
-**38/38 testes passando, `black` sem alterações necessárias.**
+**54/54 testes passando, `black` sem alterações necessárias.**

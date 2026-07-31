@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Minha conta{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Ola, {{ user.name }}</h1>
+  <p>Voce esta logado. Notificacoes de vagas chegam pelo Telegram configurado no seu perfil.</p>
+</div>
+{% endblock %}

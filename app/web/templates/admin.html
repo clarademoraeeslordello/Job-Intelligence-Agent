@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Backoffice — Acesso de usuarios{% endblock %}
+{% block content %}
+<h1>Usuarios com acesso</h1>
+
+{% if temp_password %}
+  <p class="alert alert-success">
+    Usuario <strong>{{ new_user_email }}</strong> criado. Senha temporaria (mostrada uma unica vez,
+    copie e compartilhe com a pessoa agora): <code>{{ temp_password }}</code>
+  </p>
+{% elif error %}
+  <p class="alert alert-error">{{ error }}</p>
+{% endif %}
+
+<div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>Email</th>
+        <th>Admin</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td data-label="Nome">{{ u.name }}</td>
+        <td data-label="Email">{{ u.email }}</td>
+        <td data-label="Admin">{{ "Sim" if u.is_admin else "Nao" }}</td>
+        <td data-label="Status">
+          <span class="badge {{ 'badge-ok' if u.is_active else 'badge-off' }}">
+            {{ "Ativo" if u.is_active else "Revogado" }}
+          </span>
+        </td>
+        <td data-label="Acao">
+          {% if u.id != admin.id %}
+          <form method="post" action="/admin/users/{{ u.id }}/toggle-active">
+            <button type="submit" class="btn btn-small">
+              {{ "Revogar acesso" if u.is_active else "Restaurar acesso" }}
+            </button>
+          </form>
+          {% else %}
+            <span class="muted">voce</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card card-narrow">
+  <h2>Conceder acesso a um novo usuario</h2>
+  <form method="post" action="/admin/users">
+    <label for="name">Nome</label>
+    <input type="text" id="name" name="name" required>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" required>
+
+    <label class="checkbox-label">
+      <input type="checkbox" name="is_admin" value="true">
+      Conceder acesso de administrador
+    </label>
+
+    <button type="submit" class="btn btn-primary">Criar acesso</button>
+  </form>
+</div>
+{% endblock %}

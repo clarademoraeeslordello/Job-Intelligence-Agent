@@ -14,7 +14,7 @@ Visão completa do produto e arquitetura em [`docs/`](docs/):
 - [`docs/development-plan.md`](docs/development-plan.md) — análise de arquitetura + plano de execução incremental
 - [`docs/po-backlog.md`](docs/po-backlog.md) — passo a passo para criar credenciais e colocar o agente pra rodar de verdade
 
-**Status atual:** Fases 1–6 do `docs/development-plan.md` implementadas e testadas (35/35 testes, sem chamadas reais de API). Busca abrangente via `ArbeitnowCrawler` (sem lista de empresas) + scheduler via GitHub Actions (`.github/workflows/daily-run.yml`, diário) já implementados. Falta só você criar as credenciais e cadastrar seu perfil — passo a passo completo em [`docs/po-backlog.md`](docs/po-backlog.md).
+**Status atual:** Fases 1–6 do `docs/development-plan.md` implementadas e testadas (54/54 testes, sem chamadas reais de API). Busca abrangente via `ArbeitnowCrawler`/`RemoteOKCrawler` (sem lista de empresas) + scheduler via GitHub Actions (`.github/workflows/daily-run.yml`, diário) + backoffice web de acesso (`app/web/`) já implementados. Falta só você criar as credenciais e escolher onde hospedar o backoffice — passo a passo completo em [`docs/po-backlog.md`](docs/po-backlog.md).
 
 ---
 
@@ -64,6 +64,14 @@ Gerenciamento de dependências e ambiente via [`uv`](https://docs.astral.sh/uv/)
    uv run python -m app.main
    ```
 
+7. Rode o backoffice web (login + gestão de acesso) localmente:
+
+   ```bash
+   uv run uvicorn app.web.app:app --reload --port 8010
+   ```
+
+   Acesse `http://localhost:8010/login`. Para o primeiro acesso, defina `is_admin=True` e uma senha manualmente no banco (não há UI de "primeiro admin" ainda — ver `docs/po-backlog.md`).
+
 ---
 
 ## Estrutura do projeto
@@ -93,11 +101,17 @@ app/
     jobs_service.py               # dedup + persistencia de vagas
     analysis_service.py            # persiste JobAnalysis (nunca sobrescreve)
     notification_service.py         # dedup de notificacao + threshold por usuario
+  web/
+    app.py                        # FastAPI: login + backoffice de acesso
+    security.py                    # hash/verify de senha (bcrypt), cookie de sessao assinado
+    deps.py                        # dependencias de auth (require_login, require_admin)
+    templates/                     # Jinja2, responsivo (mobile + desktop)
+    static/style.css
 data/
   database.sqlite               # banco local (git-ignored)
   resumes/                        # curriculos dos usuarios (git-ignored)
 migrations/                      # Alembic
-tests/                            # 29 testes, todos com mocks (sem chamadas reais de API)
+tests/                            # 54 testes, todos com mocks (sem chamadas reais de API)
 ```
 
 ---

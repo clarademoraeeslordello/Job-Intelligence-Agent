@@ -30,6 +30,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     telegram_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    # null = usuario ainda nao tem acesso ao backoffice/login (so cadastro de dados)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # is_active=False revoga o acesso ao login sem apagar o usuario/historico
 
     profile: Mapped["Profile | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
