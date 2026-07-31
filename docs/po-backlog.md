@@ -133,8 +133,7 @@ Decisão técnica já tomada: SDK oficial é assíncrono, quebraria a consistên
 - Fase 4 — `context_builder`, `prompts` (com critérios de elegibilidade), `analyzer`, `scorer` — testado com client Claude mockado.
 - Fase 5 — `telegram.py` + `notification_service.py` — dedup, threshold configurável — testado com client mockado.
 - Fase 6 — teste dedicado (`test_multiuser_isolation.py`) comprovando isolamento entre usuários.
-- Scheduler — `daily-run.yml` (diário) + `seed-user.yml` (cadastro, via Secrets).
-- CI — `.github/workflows/ci.yml` roda testes + lint em todo push/PR; `dependabot.yml` mantém dependências atualizadas.
+- Scheduler — `daily-run.yml` (diário) + `seed-user.yml` (cadastro, via Secrets) — únicos workflows mantidos, pra minimizar consumo de Actions. `dependabot.yml` mantém dependências atualizadas (não consome minutos de Actions, é um serviço à parte). Testes/lint rodam localmente antes de cada commit (`uv run pytest` + `uv run black`), não em CI.
 - Seu perfil real já está nos Secrets do repositório, testado localmente.
 - Frontend — `app/web/` (login + backoffice de acesso), responsivo, testado e verificado visualmente.
 
