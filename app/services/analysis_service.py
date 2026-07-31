@@ -40,4 +40,11 @@ def analyze_job_for_user(
     )
     session.add(analysis)
     session.commit()
+    logger.info(
+        "analise concluida job_id=%s user_id=%s score=%.0f recommendation=%s",
+        job.id,
+        user.id,
+        job_score.score,
+        job_score.recommendation,
+    )
     return analysis

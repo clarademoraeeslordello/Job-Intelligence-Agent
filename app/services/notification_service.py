@@ -30,6 +30,13 @@ def notify_user_about_job(
 
     threshold = user.profile.notification_score_threshold if user.profile else 80.0
     if analysis.score < threshold:
+        logger.info(
+            "user_id=%s job_id=%s score=%.0f abaixo do threshold=%.0f, notificacao ignorada",
+            user.id,
+            job.id,
+            analysis.score,
+            threshold,
+        )
         return None
 
     already_notified = session.execute(
@@ -38,6 +45,9 @@ def notify_user_about_job(
         )
     ).first()
     if already_notified:
+        logger.info(
+            "user_id=%s job_id=%s ja notificado antes, notificacao ignorada", user.id, job.id
+        )
         return None
 
     text = format_job_notification(job, analysis)
@@ -47,6 +57,10 @@ def notify_user_about_job(
     except Exception:
         logger.exception("falha ao enviar notificacao user_id=%s job_id=%s", user.id, job.id)
         status = "failed"
+    else:
+        logger.info(
+            "notificacao enviada user_id=%s job_id=%s score=%.0f", user.id, job.id, analysis.score
+        )
 
     notification = Notification(user_id=user.id, job_id=job.id, channel="telegram", status=status)
     session.add(notification)
