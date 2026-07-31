@@ -18,26 +18,60 @@ class JobScore:
     raw_response: dict
 
 
-def _strip_markdown_fences(text: str) -> str:
-    text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text)
-    text = re.sub(r"\s*```$", "", text)
-    return text.strip()
+_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
+
+
+def _extract_fenced_block(text: str) -> str | None:
+    """Busca um bloco ```json ... ``` em qualquer posicao do texto (nao so
+    quando ele envolve a resposta inteira - o modelo as vezes escreve
+    comentario em texto livre depois do bloco JSON)."""
+    match = _FENCE_RE.search(text)
+    return match.group(1) if match else None
+
+
+def _extract_first_balanced_object(text: str) -> str | None:
+    """Fallback final: extrai o primeiro objeto JSON balanceado (contando
+    chaves), ignorando qualquer texto antes/depois - cobre respostas sem
+    cercas de markdown mas com prosa antes ou depois do JSON."""
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    for i, char in enumerate(text[start:], start=start):
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
 
 
 def parse_ai_response(raw_text: str) -> JobScore:
     """Valida/normaliza a resposta da IA (ver ai-engine.md secao 3 e 7).
 
-    Tenta uma reparsagem simples (remover blocos de markdown) antes de falhar.
-    Nunca retorna um score sem justificativa: reason.positive e obrigatorio.
+    Tenta reparsagens sucessivas (bloco de markdown em qualquer posicao, depois
+    o primeiro objeto JSON balanceado) antes de desistir. Nunca retorna um score
+    sem justificativa: reason.positive e obrigatorio.
     """
-    try:
-        data = json.loads(raw_text)
-    except json.JSONDecodeError:
+    candidates = [raw_text]
+    fenced = _extract_fenced_block(raw_text)
+    if fenced is not None:
+        candidates.append(fenced)
+    balanced = _extract_first_balanced_object(raw_text)
+    if balanced is not None:
+        candidates.append(balanced)
+
+    data = None
+    for candidate in candidates:
         try:
-            data = json.loads(_strip_markdown_fences(raw_text))
-        except json.JSONDecodeError as exc:
-            raise InvalidAIResponseError(f"resposta nao e JSON valido: {raw_text!r}") from exc
+            data = json.loads(candidate)
+            break
+        except json.JSONDecodeError:
+            continue
+    if data is None:
+        raise InvalidAIResponseError(f"resposta nao e JSON valido: {raw_text!r}")
 
     try:
         score = float(data["score"])

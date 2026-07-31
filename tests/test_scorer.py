@@ -24,6 +24,24 @@ def test_parse_response_wrapped_in_markdown_fence():
     assert result.score == 95
 
 
+def test_parse_response_with_prose_after_markdown_fence():
+    # Caso real observado em producao: o Haiku escreve texto explicativo
+    # depois do bloco JSON, entao a fenca nao envolve a resposta inteira.
+    wrapped = f"```json\n{VALID_JSON}\n```\n\nAnalise adicional: esta vaga parece boa."
+
+    result = parse_ai_response(wrapped)
+
+    assert result.score == 95
+
+
+def test_parse_response_with_prose_before_and_after_no_fence():
+    wrapped = f"Aqui esta minha analise:\n{VALID_JSON}\nEspero que ajude."
+
+    result = parse_ai_response(wrapped)
+
+    assert result.score == 95
+
+
 def test_parse_invalid_json_raises():
     with pytest.raises(InvalidAIResponseError):
         parse_ai_response("isso nao e json")
