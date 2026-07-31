@@ -22,7 +22,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Restaurar banco SQLite (cache entre execucoes)
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: data/database.sqlite
           key: sqlite-db-${{ github.run_id }}
@@ -41,7 +41,7 @@ jobs:
 
       - name: Salvar banco SQLite (cache para a proxima execucao)
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: data/database.sqlite
           key: sqlite-db-${{ github.run_id }}
