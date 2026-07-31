@@ -1,10 +1,14 @@
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.crawler.base import JobDTO
 from app.database.models import Job
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -25,10 +29,21 @@ def save_jobs(session: Session, job_dtos: list[JobDTO]) -> SaveJobsResult:
     created = 0
     skipped_duplicate = 0
     skipped_invalid = 0
+    seen_in_batch: set[tuple[str, str]] = set()
 
     for dto in job_dtos:
         if not dto.url or not dto.source or not dto.external_id:
             skipped_invalid += 1
+            continue
+
+        key = (dto.source, dto.external_id)
+        if key in seen_in_batch:
+            # A mesma fonte pode retornar a mesma vaga 2x num unico crawl (ex:
+            # sobreposicao de paginacao). A sessao usa autoflush=False, entao um
+            # SELECT nao enxergaria um insert ainda nao commitado desta mesma
+            # chamada - sem essa checagem em memoria, a 2a insercao so falharia
+            # no commit final, quebrando o lote inteiro (nao so a vaga duplicada).
+            skipped_duplicate += 1
             continue
 
         already_exists = session.execute(
@@ -38,6 +53,7 @@ def save_jobs(session: Session, job_dtos: list[JobDTO]) -> SaveJobsResult:
             skipped_duplicate += 1
             continue
 
+        seen_in_batch.add(key)
         session.add(
             Job(
                 title=dto.title,
@@ -55,7 +71,17 @@ def save_jobs(session: Session, job_dtos: list[JobDTO]) -> SaveJobsResult:
         )
         created += 1
 
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # Defesa em profundidade: se algum caso de duplicata escapar das checagens
+        # acima, um commit falho nao pode deixar a sessao "envenenada" (SQLAlchemy
+        # exige rollback antes de qualquer novo uso) para o resto da execucao -
+        # isso ja quebrou analise e notificacao numa execucao real de producao.
+        session.rollback()
+        logger.exception("commit de vagas falhou por violacao de unicidade, revertido")
+        created = 0
+
     return SaveJobsResult(
         found=found,
         created=created,
