@@ -4,6 +4,12 @@
 
 ---
 
+## ✅ Resolvido — Modelo de IA trocado para Haiku (custo)
+
+`app/ai/analyzer.py` usava `claude-sonnet-5`; trocado para `claude-haiku-4-5`. A tarefa (avaliar compatibilidade currículo x vaga com critérios explícitos no prompt) não exige o raciocínio mais caro do Sonnet. Estimativa de custo com o cenário que você descreveu (10 usuários, 30 vagas novas/dia, disparo às 08:00): **cada usuário recebe sua própria análise de cada vaga** (o custo é por análise, não por disparo) — 300 análises/dia × ~$0,0022 ≈ **$0,66/dia ≈ $20/mês no total** para os 10 usuários. Acompanhe o gasto real em console.anthropic.com/settings/usage depois de rodar por alguns dias — a estimativa assume ~1.200 tokens de entrada por análise, e descrições de vaga muito longas custam mais.
+
+---
+
 ## ✅ Resolvido — Elegibilidade não podia ser hardcoded pro Brasil
 
 **Achado real (bug):** `app/ai/prompts.py` tinha o texto "exclui o Brasil" fixo no código do critério eliminatório de elegibilidade — funcionava só por acidente pro seu caso anterior, mas quebraria assim que você (ou qualquer outro usuário) tivesse uma situação diferente. Corrigido para ser genérico: o critério agora referencia "nacionalidade, localização e situação de elegibilidade do candidato descritas no contexto", que vem do `Profile.summary` de cada usuário — funciona pra qualquer nacionalidade/situação, não só Brasil.

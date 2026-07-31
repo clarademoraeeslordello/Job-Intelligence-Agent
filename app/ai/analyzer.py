@@ -5,8 +5,11 @@ from app.ai.context_builder import UserContext
 from app.ai.prompts import SYSTEM_PROMPT, build_user_message
 from app.database.models import Job
 
-MODEL = "claude-sonnet-5"
+MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 1024
+# Haiku em vez de Sonnet: a tarefa (avaliar compatibilidade curriculo x vaga a partir
+# de criterios explicitos) nao exige o raciocinio mais caro do Sonnet, e o custo por
+# analise cai ~2-3x (ver docs/po-backlog.md).
 
 
 class Analyzer:
