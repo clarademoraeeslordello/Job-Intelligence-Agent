@@ -4,7 +4,9 @@ import anthropic
 
 from app.ai.analyzer import Analyzer
 from app.config import settings
+from app.crawler.arbeitnow import ArbeitnowCrawler
 from app.crawler.greenhouse import GreenhouseCrawler
+from app.crawler.remoteok import RemoteOKCrawler
 from app.crawler.runner import CrawlerRunner
 from app.database.database import SessionLocal
 from app.database.models import Job, User
@@ -19,21 +21,16 @@ logger = logging.getLogger(__name__)
 def run_once() -> None:
     """Executa um ciclo completo: coleta -> analise -> notificacao.
 
-    Ponto de entrada manual para a Sprint 2-5 (o scheduler ainda nao tem tecnologia
-    definida - ver docs/po-backlog.md). Cada estagio degrada graciosamente se a
-    configuracao necessaria (board tokens, CLAUDE_API_KEY, TELEGRAM_TOKEN) nao
-    estiver presente, em vez de quebrar o processo inteiro.
+    Chamado diariamente via GitHub Actions (.github/workflows/daily-run.yml).
+    Cada estagio degrada graciosamente se a configuracao necessaria (CLAUDE_API_KEY,
+    TELEGRAM_TOKEN) nao estiver presente, em vez de quebrar o processo inteiro.
     """
     session = SessionLocal()
     try:
-        if not settings.greenhouse_board_tokens:
-            logger.warning(
-                "GREENHOUSE_BOARD_TOKENS vazio - nenhuma empresa configurada para rastrear "
-                "(ver docs/po-backlog.md)"
-            )
-            return
-
-        crawlers = [GreenhouseCrawler(board_token=t) for t in settings.greenhouse_board_tokens]
+        # Arbeitnow + RemoteOK rodam sempre: busca abrangente, sem depender de lista de
+        # empresas (ver docs/po-backlog.md). GreenhouseCrawler entra por empresa, se configurado.
+        crawlers: list = [ArbeitnowCrawler(lookback_hours=48), RemoteOKCrawler(lookback_hours=48)]
+        crawlers += [GreenhouseCrawler(board_token=t) for t in settings.greenhouse_board_tokens]
         CrawlerRunner(crawlers).run(session)
 
         if not settings.claude_api_key:

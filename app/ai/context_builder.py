@@ -15,6 +15,8 @@ class UserContext:
     languages: list[str]
     salary_expectation: str | None
     remote_preference: str | None
+    employment_types: list[str] = field(default_factory=list)
+    requires_brazil_eligible: bool = False
     resume: dict = field(default_factory=dict)
 
     def as_prompt_text(self) -> str:
@@ -25,7 +27,16 @@ class UserContext:
             f"Anos de experiencia: {self.years_experience if self.years_experience is not None else 'nao informado'}",
             f"Expectativa salarial: {self.salary_expectation or 'nao informado'}",
             f"Preferencia de modelo de trabalho: {self.remote_preference or 'nao informado'}",
+            f"Tipos de contratacao aceitos: {', '.join(self.employment_types) or 'nao informado'} "
+            "(CLT = full-time employment; PJ = independent contractor/freelance; "
+            "Cooperativa = cooperative contract)",
         ]
+        if self.requires_brazil_eligible:
+            lines.append(
+                "Restricao importante: o candidato esta baseado no Brasil e so pode aceitar "
+                "vagas remotas explicitamente abertas a candidatos no Brasil, sem exigencia de "
+                "visto ou autorizacao de trabalho em outro pais."
+            )
         if self.summary:
             lines.append(f"Resumo profissional: {self.summary}")
         if self.resume.get("skills"):
@@ -53,5 +64,7 @@ def build_user_context(user: User) -> UserContext:
         languages=profile.languages if profile else [],
         salary_expectation=profile.salary_expectation if profile else None,
         remote_preference=profile.remote_preference if profile else None,
+        employment_types=profile.employment_types if profile else [],
+        requires_brazil_eligible=profile.requires_brazil_eligible if profile else False,
         resume=resume.structured_json if resume else {},
     )

@@ -55,6 +55,14 @@ class Profile(Base):
     # remote_preference: "remote" | "hybrid" | "onsite" | "any" (ver database-design.md 3.2)
     notification_score_threshold: Mapped[float] = mapped_column(Float, default=80.0)
     # score minimo (0-100) para o usuario ser notificado (ver roadmap.md Fase 5)
+    employment_types: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # tipos de contratacao aceitos, ex: ["CLT", "PJ", "Cooperativa"] (termos BR).
+    # Equivalencia internacional usada no prompt de IA (ver app/ai/prompts.py):
+    # CLT ~ "full-time employment", PJ ~ "independent contractor/freelance",
+    # Cooperativa ~ "cooperative contract".
+    requires_brazil_eligible: Mapped[bool] = mapped_column(Boolean, default=False)
+    # se True, o candidato so aceita vagas remotas explicitamente abertas a
+    # candidatos baseados no Brasil (sem exigencia de visto/autorizacao de outro pais)
 
     user: Mapped["User"] = relationship(back_populates="profile")
 

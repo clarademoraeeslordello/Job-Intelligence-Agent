@@ -1,0 +1,47 @@
+name: Busca diaria de vagas
+
+on:
+  schedule:
+    # 09:00 UTC = 06:00 horario de Brasilia (BRT, UTC-3). Ajuste conforme necessario.
+    - cron: "0 9 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Instalar dependencias
+        run: uv sync --frozen
+
+      - name: Restaurar banco SQLite (cache entre execucoes)
+        uses: actions/cache/restore@v4
+        with:
+          path: data/database.sqlite
+          key: sqlite-db-${{ github.run_id }}
+          restore-keys: |
+            sqlite-db-
+
+      - name: Aplicar migrations
+        run: uv run alembic upgrade head
+
+      - name: Rodar coleta + analise + notificacao
+        env:
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          GREENHOUSE_BOARD_TOKENS: ${{ vars.GREENHOUSE_BOARD_TOKENS }}
+        run: uv run python -m app.main
+
+      - name: Salvar banco SQLite (cache para a proxima execucao)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/database.sqlite
+          key: sqlite-db-${{ github.run_id }}

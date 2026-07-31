@@ -12,9 +12,9 @@ Visão completa do produto e arquitetura em [`docs/`](docs/):
 - [`development-guidelines.md`](development-guidelines.md) — regras de código
 - [`roadmap.md`](roadmap.md) — roadmap de produto
 - [`docs/development-plan.md`](docs/development-plan.md) — análise de arquitetura + plano de execução incremental
-- [`docs/po-backlog.md`](docs/po-backlog.md) — bloqueios e decisões pendentes (ex: lista de empresas a rastrear, credenciais reais)
+- [`docs/po-backlog.md`](docs/po-backlog.md) — passo a passo para criar credenciais e colocar o agente pra rodar de verdade
 
-**Status atual:** Fases 1–6 do `docs/development-plan.md` implementadas como scaffolding testado (29/29 testes, sem chamadas reais de API). Uso end-to-end em produção depende dos itens em `docs/po-backlog.md` (credenciais reais, lista de empresas, tecnologia de scheduler).
+**Status atual:** Fases 1–6 do `docs/development-plan.md` implementadas e testadas (35/35 testes, sem chamadas reais de API). Busca abrangente via `ArbeitnowCrawler` (sem lista de empresas) + scheduler via GitHub Actions (`.github/workflows/daily-run.yml`, diário) já implementados. Falta só você criar as credenciais e cadastrar seu perfil — passo a passo completo em [`docs/po-backlog.md`](docs/po-backlog.md).
 
 ---
 
@@ -78,8 +78,10 @@ app/
     models.py                  # User, Profile, Resume, Job, JobAnalysis, Application, Notification
   crawler/
     base.py                    # BaseCrawler + JobDTO (contrato)
-    greenhouse.py               # GreenhouseCrawler (API JSON, sem Playwright)
-    runner.py                    # CrawlerRunner (isola falha por fonte)
+    arbeitnow.py                 # ArbeitnowCrawler (busca abrangente, sem config)
+    greenhouse.py                 # GreenhouseCrawler (API JSON, sem Playwright)
+    runner.py                      # CrawlerRunner (isola falha por fonte)
+  seed.py                     # cadastra/atualiza usuario a partir de env vars (Secrets)
   ai/
     context_builder.py          # User Context Engine
     prompts.py

@@ -1,0 +1,49 @@
+name: Cadastrar/atualizar usuario
+
+# Roda apenas manualmente (aba Actions > Run workflow), nunca automatico.
+# Le dados pessoais de GitHub Secrets (nunca de inputs do workflow_dispatch,
+# que ficam visiveis no historico publico do repositorio - ver docs/po-backlog.md).
+on:
+  workflow_dispatch: {}
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Instalar dependencias
+        run: uv sync --frozen
+
+      - name: Restaurar banco SQLite (cache entre execucoes)
+        uses: actions/cache/restore@v4
+        with:
+          path: data/database.sqlite
+          key: sqlite-db-${{ github.run_id }}
+          restore-keys: |
+            sqlite-db-
+
+      - name: Aplicar migrations
+        run: uv run alembic upgrade head
+
+      - name: Cadastrar usuario
+        env:
+          USER_NAME: ${{ secrets.USER_NAME }}
+          USER_EMAIL: ${{ secrets.USER_EMAIL }}
+          USER_TELEGRAM_CHAT_ID: ${{ secrets.USER_TELEGRAM_CHAT_ID }}
+          PROFILE_JSON: ${{ secrets.PROFILE_JSON }}
+          RESUME_JSON: ${{ secrets.RESUME_JSON }}
+        run: uv run python -m app.seed
+
+      - name: Salvar banco SQLite (cache para a proxima execucao)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/database.sqlite
+          key: sqlite-db-${{ github.run_id }}

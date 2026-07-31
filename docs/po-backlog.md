@@ -1,69 +1,120 @@
 # PO Backlog — Bloqueios e Decisões Pendentes
 
-**Gerado em:** desenvolvimento contínuo das Fases 2–6 (ver `docs/development-plan.md`).
-**Como usar:** cada item abaixo é algo que **depende de decisão da Clara** para avançar de "scaffolding testado" para "uso real em produção". Nada aqui bloqueou o desenvolvimento — o código segue funcional e testado (29/29 testes passando) com comportamento degradado documentado em cada ponto.
+**Como usar:** cada item abaixo é algo que depende de decisão ou ação da Clara para avançar de "scaffolding testado" para "uso real em produção". Nada aqui bloqueou o desenvolvimento — o código segue funcional e testado (35/35 testes passando).
 
 ---
 
-## 1. Lista de empresas Greenhouse a rastrear (decisão de produto)
+## ✅ Resolvido — Busca abrangente (sem lista de empresas)
 
-**Status:** bloqueado — precisa da sua decisão.
+Você não quer curar uma lista de empresas — quer cobertura ampla, sem esforço manual. `GreenhouseCrawler` continua existindo (útil se um dia você quiser rastrear uma empresa específica), mas o crawler principal agora é `ArbeitnowCrawler` (`app/crawler/arbeitnow.py`): API pública e gratuita, sem autenticação, que agrega vagas de múltiplas fontes/países, sem precisar de nenhuma configuração. Ele já filtra automaticamente para trazer só vagas publicadas nas últimas 48h (`lookback_hours=48` — a folga de 48h em vez de 24h é para tolerar atraso entre execuções diárias sem perder vaga). Roda sempre, incondicionalmente, em `app/main.py`.
 
-`GreenhouseCrawler` está implementado e testado, mas o Greenhouse não tem busca global — cada empresa tem seu próprio "board token" (ex: `spotify`, `notion`). Hoje isso é lido de `GREENHOUSE_BOARD_TOKENS` no `.env` (vazio por padrão). `app/main.py` já loga um aviso claro e não quebra se estiver vazio.
+**Limitação a saber:** nenhuma fonte agregadora cobre 100% do mercado (LinkedIn e Indeed, por exemplo, não têm API pública aberta e bloqueiam scraping agressivamente — por isso não estão nas fontes). Cobertura "bem abrangente" aqui significa múltiplas fontes públicas somadas ao longo do tempo, não uma fonte única universal. Se quiser, dá pra somar mais agregadores depois (ex: RemoteOK).
 
-**Preciso de:** lista inicial de empresas/board tokens que você quer rastrear (pode ser 2-3 para começar). O board token normalmente aparece na URL pública da vaga: `boards.greenhouse.io/<board_token>/jobs/...`.
+## ✅ Resolvido — Tecnologia de scheduler
 
-## 2. Credenciais reais (CLAUDE_API_KEY, TELEGRAM_TOKEN)
+**GitHub Actions**, confirmado por você — gratuito (repo público), roda na nuvem, não depende do seu PC ligado. Implementado em `.github/workflows/daily-run.yml`, agendado para rodar todo dia às 09:00 UTC (06:00 horário de Brasília). Pode ser disparado manualmente também (aba **Actions** → **Busca diaria de vagas** → **Run workflow**).
 
-**Status:** bloqueado — nenhuma chave real disponível nesta máquina/sessão.
+**Decisão técnica importante:** o banco SQLite não pode ser commitado no git (repo é público, e o banco guarda currículo/salário/dados pessoais — commitar isso no histórico do git seria um vazamento permanente). Em vez disso, o banco persiste entre execuções via `actions/cache` (armazenamento interno do GitHub Actions, não navegável publicamente, nunca aparece no código-fonte do repositório).
 
-Todo o motor de IA (`app/ai/`) e de notificação (`app/notifications/telegram.py`) está implementado e testado com clients mockados (nenhuma chamada real de API nos testes). Para rodar `app/main.py` de ponta a ponta de verdade, faltam:
+## 🔴 Ação sua — Criar as credenciais
 
-- `CLAUDE_API_KEY` — chave da Claude API (console.anthropic.com).
-- `TELEGRAM_TOKEN` — token de bot criado via [@BotFather](https://t.me/BotFather), e o `telegram_chat_id` de cada usuário cadastrado.
+Nenhuma dessas eu posso criar por você (são contas/chaves pessoais). Passo a passo:
 
-Sem essas chaves, `run_once()` executa a coleta de vagas normalmente e para antes da análise/notificação (com log de aviso), sem quebrar.
+### 1. Claude API Key
 
-## 3. Tecnologia de scheduler ainda não decidida
+1. Acesse [console.anthropic.com](https://console.anthropic.com) e faça login/cadastro.
+2. Vá em **API Keys** → **Create Key**.
+3. Copie a chave (só aparece uma vez).
 
-**Status:** pendente de decisão, não bloqueia o MVP.
+### 2. Telegram Bot Token
 
-`docs/development-plan.md` já apontava isso como risco. Hoje existe só `app/main.py` como entrypoint manual (`python -m app.main`). Opções para decidir depois:
+1. No Telegram, procure **@BotFather** e inicie uma conversa.
+2. Envie `/newbot`, escolha um nome e um username (precisa terminar em `bot`, ex: `job_intelligence_clara_bot`).
+3. O BotFather devolve um token no formato `123456:ABC-DEF...` — isso é o `TELEGRAM_TOKEN`.
 
-- Cron do SO (Windows Task Scheduler / cron no Linux, se migrar para um servidor).
-- `APScheduler` embutido no próprio processo Python (roda continuamente).
-- Execução agendada via GitHub Actions (mais simples de operar, sem servidor próprio).
+### 3. Telegram Chat ID (seu e de quem mais for usar)
 
-**Preciso de:** onde/como você pretende rodar isso continuamente (sua máquina sempre ligada? um servidor? GitHub Actions?) para escolher a opção certa.
+1. No Telegram, procure **@userinfobot** e inicie uma conversa com ele — ele responde na hora com seu `chat_id` (um número).
+2. Repita para cada pessoa que vai usar (você, sua mãe, sua esposa) — cada uma precisa iniciar uma conversa com o bot que você criou no passo 2 antes de poder receber mensagens dele (o Telegram exige isso por segurança).
 
-## 4. `resume_parser.py` (PDF → JSON) não implementado
+### 4. Cadastrar tudo como GitHub Secrets/Variables (nunca no código ou no `.env` commitado)
 
-**Status:** adiado intencionalmente, não bloqueia.
+No repositório, vá em **Settings → Secrets and variables → Actions**.
 
-A Sprint 1 assumiu cadastro manual do currículo estruturado (`Resume.structured_json`), conforme `architecture.md` (`candidate_profile.json`). Parsing automático de PDF (via `pypdf`/`pdfplumber` + extração assistida por IA) não foi implementado — não estava no escopo de nenhuma fase até agora e não bloqueia o MVP, já que o currículo pode ser inserido como JSON diretamente.
+**Em "Secrets" (valores nunca aparecem em log, nem pra você depois de salvos):**
 
-**Preciso de:** confirmar se isso entra como Fase 7 (ou parte da Fase 3 do `roadmap.md`, "Multiusuário") antes de eu implementar.
+| Nome | Valor |
+|---|---|
+| `CLAUDE_API_KEY` | a chave do passo 1 |
+| `TELEGRAM_TOKEN` | o token do passo 2 |
+| `USER_NAME` | seu nome |
+| `USER_EMAIL` | seu email |
+| `USER_TELEGRAM_CHAT_ID` | seu chat_id do passo 3 |
+| `PROFILE_JSON` | ver formato abaixo |
+| `RESUME_JSON` | ver formato abaixo |
 
-## 5. Nome de exibição da empresa (Greenhouse)
+**Em "Variables" (não sensível, pode aparecer em log):**
 
-**Status:** simplificação técnica, não bloqueia.
+| Nome | Valor |
+|---|---|
+| `GREENHOUSE_BOARD_TOKENS` | opcional, vazio por padrão |
 
-`GreenhouseCrawler` usa o `board_token` como `company` (ex: `"spotify"`) em vez do nome de exibição real. O nome real está disponível via `GET /v1/boards/{token}` (endpoint separado), não implementado ainda por ser um refinamento de baixa prioridade frente ao restante do MVP.
+**Formato de `PROFILE_JSON`** (todos os campos opcionais):
+```json
+{
+  "headline": "Product Manager Senior",
+  "summary": "8 anos de experiencia em produtos B2B SaaS",
+  "years_experience": 8,
+  "desired_roles": ["Product Manager", "Head of Product"],
+  "desired_locations": ["Remoto", "Suecia"],
+  "languages": ["Portugues", "Ingles"],
+  "salary_expectation": "€60k-80k",
+  "remote_preference": "remote",
+  "notification_score_threshold": 75
+}
+```
 
-## 6. Decisão técnica: Telegram via `httpx` direto, não `python-telegram-bot`
+**Formato de `RESUME_JSON`:**
+```json
+{
+  "skills": ["product management", "sql", "figma"],
+  "experience": [{"empresa": "...", "cargo": "...", "periodo": "..."}],
+  "education": [{"curso": "...", "instituicao": "..."}],
+  "languages": ["Portugues nativo", "Ingles fluente"]
+}
+```
 
-**Status:** decisão já tomada, só documentando.
+### 5. Rodar o cadastro
 
-O SDK oficial `python-telegram-bot` é assíncrono (`asyncio`), o que introduziria inconsistência num codebase majoritariamente síncrono. Implementei `TelegramNotifier` com chamada HTTP direta via `httpx` (mesma biblioteca já usada nos crawlers), testável com `respx` sem rede real. Dependência `python-telegram-bot` removida do `pyproject.toml`.
+Depois de salvar os secrets: aba **Actions** → **Cadastrar/atualizar usuario** → **Run workflow**. Roda uma vez, cria seu usuário no banco. Repita sempre que quiser atualizar perfil/currículo (é upsert — não duplica).
+
+Depois disso, `daily-run.yml` já vai te notificar automaticamente todo dia, se houver vaga com score acima do seu `notification_score_threshold`.
 
 ---
 
-## Resumo do que já está pronto e testado (sem depender dos itens acima)
+## Pendências de menor prioridade (não bloqueiam)
 
-- Fase 2 — Crawler engine (`BaseCrawler`, `JobDTO`, `GreenhouseCrawler`, `CrawlerRunner`, dedup).
+### `resume_parser.py` (PDF → JSON) não implementado
+
+Hoje o currículo entra como JSON estruturado (`RESUME_JSON`, ver acima), preenchido manualmente. Parsing automático de PDF fica pra depois — não bloqueia o uso real, só exige que você monte o JSON uma vez.
+
+### Nome de exibição da empresa (Greenhouse)
+
+`GreenhouseCrawler` (usado só se você configurar `GREENHOUSE_BOARD_TOKENS`) usa o board token como nome da empresa em vez do nome real. Baixa prioridade.
+
+### Telegram via `httpx` direto, não `python-telegram-bot`
+
+Decisão técnica já tomada: o SDK oficial é assíncrono, o que quebraria a consistência do codebase síncrono. `TelegramNotifier` usa `httpx` direto (mesma lib dos crawlers), testável sem rede real.
+
+---
+
+## Resumo do que já está pronto e testado
+
+- Fase 2 — Crawler engine (`BaseCrawler`, `JobDTO`, `GreenhouseCrawler`, `ArbeitnowCrawler`, `CrawlerRunner`, dedup).
 - Fase 3 — Schema completo (`Job`, `JobAnalysis`, `Application`, `Notification`) + `JobsService`.
 - Fase 4 — `context_builder`, `prompts`, `analyzer`, `scorer` — testado com client Claude mockado.
-- Fase 5 — `telegram.py` + `notification_service.py` — dedup por `(user_id, job_id)`, threshold de score configurável por perfil, testado com client Telegram mockado.
-- Fase 6 — teste dedicado (`test_multiuser_isolation.py`) comprovando que `JobAnalysis` e `Notification` nunca vazam entre usuários.
+- Fase 5 — `telegram.py` + `notification_service.py` — dedup, threshold configurável — testado com client mockado.
+- Fase 6 — teste dedicado (`test_multiuser_isolation.py`) comprovando isolamento entre usuários.
+- Scheduler — `.github/workflows/daily-run.yml` (diário) + `seed-user.yml` (cadastro manual, dados sensíveis via Secrets).
 
-**29/29 testes passando, `black` sem alterações necessárias.**
+**35/35 testes passando, `black` sem alterações necessárias.**
