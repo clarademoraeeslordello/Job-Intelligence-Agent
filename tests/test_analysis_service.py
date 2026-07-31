@@ -67,7 +67,32 @@ def test_analyze_job_for_user_returns_none_on_invalid_response(session, user_and
     result = analyze_job_for_user(session, analyzer, user, job)
 
     assert result is None
-    assert session.execute(select(JobAnalysis)).scalars().all() == []
+
+
+def test_analyze_job_for_user_records_marker_on_invalid_response_to_avoid_reprocessing(
+    session, user_and_job
+):
+    # Achado real em producao: sem o marcador, a mesma vaga com resposta invalida
+    # era reprocessada (e re-cobrada na API) a cada disparo, para sempre.
+    user, job = user_and_job
+    analyzer = _FakeAnalyzer("resposta invalida, nao e json")
+
+    analyze_job_for_user(session, analyzer, user, job)
+
+    marker = session.execute(select(JobAnalysis)).scalar_one()
+    assert marker.score == 0
+    assert marker.recommendation == "IGNORE"
+    assert marker.raw_ai_response["error"] == "invalid_ai_response"
+
+
+def test_analyze_job_for_user_does_not_reprocess_after_marker_recorded(session, user_and_job):
+    user, job = user_and_job
+    analyzer = _FakeAnalyzer("resposta invalida, nao e json")
+    analyze_job_for_user(session, analyzer, user, job)
+
+    already_analyzed = any(a.user_id == user.id for a in job.analyses)
+
+    assert already_analyzed is True
 
 
 def test_analyze_job_for_user_never_overwrites_previous_analysis(session, user_and_job):

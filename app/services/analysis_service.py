@@ -17,8 +17,10 @@ def analyze_job_for_user(
 
     Nunca sobrescreve uma analise existente — cada chamada cria um novo registro,
     preservando historico (ver database-design.md, secao 4). Se a resposta da IA
-    for invalida, a vaga fica sem analise valida e nao deve gerar notificacao
-    (ver ai-engine.md, secao 7) — retorna None nesse caso.
+    for invalida, registra uma JobAnalysis-marcador (score=0, IGNORE) em vez de
+    nao persistir nada — sem isso, a mesma vaga era reprocessada (e re-cobrada)
+    a cada disparo, pra sempre, sem nunca resolver (achado em producao). Retorna
+    None nesse caso, entao nunca gera notificacao (ver ai-engine.md, secao 7).
     """
     context = build_user_context(user)
 
@@ -27,6 +29,18 @@ def analyze_job_for_user(
         job_score = parse_ai_response(raw_text)
     except InvalidAIResponseError:
         logger.exception("analise invalida para job_id=%s user_id=%s", job.id, user.id)
+        session.add(
+            JobAnalysis(
+                job_id=job.id,
+                user_id=user.id,
+                score=0,
+                recommendation="IGNORE",
+                positive_points=["Analise automatica falhou - nao reprocessada"],
+                negative_points=[],
+                raw_ai_response={"error": "invalid_ai_response", "raw_text": raw_text},
+            )
+        )
+        session.commit()
         return None
 
     analysis = JobAnalysis(
