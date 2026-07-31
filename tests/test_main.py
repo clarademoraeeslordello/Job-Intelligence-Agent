@@ -1,9 +1,11 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.database.models import Base, Job, JobAnalysis, Notification, Profile, User
-from app.main import process_users_and_jobs
+from app.main import MAX_JOBS_PER_RUN, process_users_and_jobs
 
 VALID_RESPONSE = (
     '{"score": 90, "recommendation": "APPLY", '
@@ -46,7 +48,7 @@ def _make_user(session, email="clara@example.com", chat_id="1") -> User:
     return user
 
 
-def _make_job(session, external_id="1") -> Job:
+def _make_job(session, external_id="1", created_at=None) -> Job:
     job = Job(
         title="PM",
         company="acme",
@@ -59,6 +61,7 @@ def _make_job(session, external_id="1") -> Job:
         url=f"https://x.com/{external_id}",
         source="greenhouse",
         external_id=external_id,
+        created_at=created_at or datetime.now(timezone.utc),
     )
     session.add(job)
     session.commit()
@@ -114,3 +117,24 @@ def test_process_handles_multiple_users_independently(session):
     analyses = session.execute(select(JobAnalysis)).scalars().all()
     assert {a.user_id for a in analyses} == {clara.id, mae.id}
     assert len(notifier.sent) == 2
+
+
+def test_process_limits_to_most_recent_jobs_per_run(session):
+    user = _make_user(session)
+    now = datetime.now(timezone.utc)
+    total_jobs = MAX_JOBS_PER_RUN + 5
+    for i in range(total_jobs):
+        # jobs mais antigos primeiro, para o mais recente ter i mais alto
+        _make_job(session, external_id=str(i), created_at=now - timedelta(minutes=total_jobs - i))
+    analyzer = _FakeAnalyzer()
+
+    process_users_and_jobs(session, analyzer, notifier=None)
+
+    assert analyzer.calls == MAX_JOBS_PER_RUN
+    analyzed_job_ids = {a.job_id for a in session.execute(select(JobAnalysis)).scalars().all()}
+    most_recent_jobs = (
+        session.execute(select(Job).order_by(Job.created_at.desc()).limit(MAX_JOBS_PER_RUN))
+        .scalars()
+        .all()
+    )
+    assert analyzed_job_ids == {j.id for j in most_recent_jobs}

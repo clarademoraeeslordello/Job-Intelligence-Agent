@@ -18,6 +18,11 @@ from app.services.notification_service import notify_user_about_job
 
 logger = logging.getLogger(__name__)
 
+MAX_JOBS_PER_RUN = 30
+# Teto de vagas (mais recentes) analisadas por disparo, independente de quantos
+# usuarios existem. Sem isso, a primeira execucao com credenciais processa todo o
+# backlog acumulado de vagas nunca analisadas - caro e lento (ver docs/po-backlog.md).
+
 
 def process_users_and_jobs(
     session: Session, analyzer: Analyzer, notifier: TelegramNotifier | None
@@ -25,9 +30,13 @@ def process_users_and_jobs(
     """Para cada (usuario, vaga) ainda nao analisado, gera a analise e, se houver
     notifier configurado, notifica. Extraido de run_once() para ser testavel com
     dependencias injetadas (fakes), sem precisar de credenciais reais nos testes.
+
+    Limita a analise as MAX_JOBS_PER_RUN vagas mais recentes por disparo - vagas
+    mais antigas que isso ficam sem analise (aceitavel: o objetivo e vagas
+    publicadas recentemente, nao esgotar um backlog historico).
     """
     users = session.query(User).all()
-    jobs = session.query(Job).all()
+    jobs = session.query(Job).order_by(Job.created_at.desc()).limit(MAX_JOBS_PER_RUN).all()
 
     for user in users:
         for job in jobs:
