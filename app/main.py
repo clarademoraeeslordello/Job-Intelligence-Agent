@@ -10,16 +10,17 @@ from app.crawler.greenhouse import GreenhouseCrawler
 from app.crawler.remoteok import RemoteOKCrawler
 from app.crawler.runner import CrawlerRunner
 from app.database.database import SessionLocal
-from app.database.models import Job, User
+from app.database.models import User
 from app.logging_config import configure_logging
 from app.notifications.telegram import TelegramNotifier
 from app.services.analysis_service import analyze_job_for_user
+from app.services.job_matching import select_jobs_for_user
 from app.services.notification_service import notify_user_about_job
 
 logger = logging.getLogger(__name__)
 
 MAX_JOBS_PER_RUN = 30
-# Teto de vagas (mais recentes) analisadas por disparo, independente de quantos
+# Teto de vagas analisadas por disparo, por usuario, independente de quantos
 # usuarios existem. Sem isso, a primeira execucao com credenciais processa todo o
 # backlog acumulado de vagas nunca analisadas - caro e lento (ver docs/po-backlog.md).
 
@@ -31,19 +32,15 @@ def process_users_and_jobs(
     notifier configurado, notifica. Extraido de run_once() para ser testavel com
     dependencias injetadas (fakes), sem precisar de credenciais reais nos testes.
 
-    Limita a analise as MAX_JOBS_PER_RUN vagas mais recentes por disparo - vagas
-    mais antigas que isso ficam sem analise (aceitavel: o objetivo e vagas
-    publicadas recentemente, nao esgotar um backlog historico).
+    A fila de cada usuario e triada por aderencia ao perfil antes da analise (ver
+    app/services/job_matching.py): gasta-se as MAX_JOBS_PER_RUN analises pagas nas
+    vagas mais aderentes, nao nas mais recentes. Vagas sem nenhuma relacao com os
+    cargos desejados nao chegam a ser analisadas.
     """
     users = session.query(User).all()
-    jobs = session.query(Job).order_by(Job.created_at.desc()).limit(MAX_JOBS_PER_RUN).all()
 
     for user in users:
-        for job in jobs:
-            already_analyzed = any(a.user_id == user.id for a in job.analyses)
-            if already_analyzed:
-                continue
-
+        for job in select_jobs_for_user(session, user, MAX_JOBS_PER_RUN):
             analysis = analyze_job_for_user(session, analyzer, user, job)
             if analysis is None or notifier is None:
                 continue
