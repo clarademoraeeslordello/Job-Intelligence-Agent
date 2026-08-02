@@ -31,7 +31,32 @@ TITLE_TOKEN_WEIGHT = 10
 TITLE_PHRASE_WEIGHT = 25
 DESCRIPTION_TOKEN_WEIGHT = 1
 DESCRIPTION_TOKEN_CAP = 5
-REMOTE_MISMATCH_PENALTY = 5
+
+LANGUAGE_REQUIREMENT_MARKERS: dict[str, tuple[str, ...]] = {
+    "german": ("m/w/d", "w/m/d", "deutschkenntnisse", "deutsch in wort", "fliessend deutsch"),
+    "french": ("francais courant", "maitrise du francais", "langue francaise"),
+    "dutch": ("vloeiend nederlands", "nederlands sprekend"),
+    "italian": ("italiano fluente", "conoscenza dell italiano"),
+    "spanish": ("espanol nativo", "castellano nativo"),
+}
+# Corte grosso de idioma, antes da IA. So marcadores inequivocos de que o anuncio
+# EXIGE a lingua - o julgamento fino (nivel exigido vs nivel do candidato) continua
+# sendo da IA, que ja recebe Profile.languages.
+#
+# Cuidado deliberado com "(m/f/d)": e a variante inglesa do marcador de genero
+# alemao e aparece em anuncio alemao escrito EM INGLES, que serve. So "(m/w/d)" e
+# "(w/m/d)" indicam anuncio em alemao. Confundir os dois derrubaria metade das
+# vagas boas medidas em dry-run.
+
+LANGUAGE_ALIASES: dict[str, tuple[str, ...]] = {
+    "german": ("german", "alemao", "deutsch"),
+    "french": ("french", "frances", "francais"),
+    "dutch": ("dutch", "holandes", "nederlands"),
+    "italian": ("italian", "italiano"),
+    "spanish": ("spanish", "espanhol", "espanol", "castellano"),
+}
+# Profile.languages e texto livre ("Ingles avancado", "English", "en"), entao o
+# casamento e por alias em vez de igualdade exata.
 
 MIN_TITLE_TOKENS = 2
 # Um unico token generico do cargo no titulo nao qualifica a vaga. Medido em
@@ -87,6 +112,60 @@ def _tokens(text: str | None) -> set[str]:
     }
 
 
+def is_remote(job: Job) -> bool:
+    """Se a vaga e remota, olhando tambem a localizacao.
+
+    O flag `remote` do Arbeitnow e majoritariamente honesto, mas medindo 348
+    vagas reais (02/08/2026) 8 vinham com remote=False e localizacao dizendo o
+    contrario ("Berlin, Remote", "Remote-United Kingdom"). Como o corte de
+    remoto e eliminatorio, um falso negativo aqui custa uma vaga boa.
+    """
+    if job.remote:
+        return True
+    return "remote" in _normalize(job.location) or "home office" in _normalize(job.location)
+
+
+def speaks(profile: Profile, language: str) -> bool:
+    """Se o usuario declarou a lingua em Profile.languages (comparacao por alias)."""
+    declared = " ".join(_normalize(entry) for entry in (profile.languages or []))
+    return any(alias in declared for alias in LANGUAGE_ALIASES.get(language, (language,)))
+
+
+def requires_unavailable_language(job: Job, profile: Profile) -> str | None:
+    """Lingua que o anuncio exige e que o usuario nao declarou, se houver.
+
+    Sem Profile.languages preenchido nao ha o que comparar - nao descarta nada,
+    para nao zerar a fila por perfil incompleto.
+    """
+    if not profile.languages:
+        return None
+
+    haystack = f"{_normalize(job.title)} {_normalize(job.description)}"
+    for language, markers in LANGUAGE_REQUIREMENT_MARKERS.items():
+        if speaks(profile, language):
+            continue
+        if any(marker in haystack for marker in markers):
+            return language
+    return None
+
+
+def is_eligible(job: Job, profile: Profile) -> tuple[bool, str]:
+    """Cortes eliminatorios, aplicados antes de qualquer pontuacao.
+
+    Diferente do ranking, aqui nao ha meio-termo: reprovar em remoto ou em idioma
+    tira a vaga da fila, por melhor que fosse a aderencia de cargo. Retorna
+    tambem o motivo, para o log dizer por que a fila encolheu.
+    """
+    if profile.remote_preference == "remote" and not is_remote(job):
+        return False, "nao_remota"
+
+    language = requires_unavailable_language(job, profile)
+    if language:
+        return False, f"exige_{language}"
+
+    return True, "elegivel"
+
+
 def relevance_score(job: Job, profile: Profile | None) -> int:
     """Pontua o quanto a vaga se parece com o que o usuario procura (0 = nenhuma relacao).
 
@@ -125,9 +204,6 @@ def relevance_score(job: Job, profile: Profile | None) -> int:
     description_hits = len(role_tokens & _tokens(job.description))
     score += DESCRIPTION_TOKEN_WEIGHT * min(description_hits, DESCRIPTION_TOKEN_CAP)
 
-    if score > 0 and profile.remote_preference == "remote" and not job.remote:
-        score = max(0, score - REMOTE_MISMATCH_PENALTY)
-
     return score
 
 
@@ -158,18 +234,26 @@ def select_jobs_for_user(session: Session, user: User, limit: int) -> list[Job]:
         ranked = sorted(pending, key=lambda job: job.created_at, reverse=True)
         return ranked[:limit]
 
-    scored = [(relevance_score(job, profile), job) for job in pending]
+    rejections: dict[str, int] = {}
+    eligible = []
+    for job in pending:
+        ok, reason = is_eligible(job, profile)
+        if ok:
+            eligible.append(job)
+        else:
+            rejections[reason] = rejections.get(reason, 0) + 1
+
+    scored = [(relevance_score(job, profile), job) for job in eligible]
     relevant = [(score, job) for score, job in scored if score > 0]
     relevant.sort(key=lambda pair: (pair[0], pair[1].created_at), reverse=True)
     selected = [job for _, job in relevant[:limit]]
 
+    rejections["fora_do_perfil"] = len(eligible) - len(relevant)
     logger.info(
-        "triagem de aderencia user_id=%s pendentes=%s aderentes=%s descartadas=%s "
-        "selecionadas=%s",
+        "triagem user_id=%s pendentes=%s selecionadas=%s descartes=%s",
         user.id,
         len(pending),
-        len(relevant),
-        len(pending) - len(relevant),
         len(selected),
+        ", ".join(f"{reason}={count}" for reason, count in sorted(rejections.items()) if count),
     )
     return selected

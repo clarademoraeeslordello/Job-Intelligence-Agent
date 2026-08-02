@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.database.models import Base, Job, JobAnalysis, Profile, User
-from app.services.job_matching import relevance_score, select_jobs_for_user
+from app.services.job_matching import is_eligible, relevance_score, select_jobs_for_user
 
 ROLES = ["Product Manager", "Product Owner", "Gerente de Produto"]
 
@@ -18,7 +18,7 @@ def session():
         yield session
 
 
-def _make_user(session, roles=ROLES, remote_preference="remote") -> User:
+def _make_user(session, roles=ROLES, remote_preference="any", languages=None) -> User:
     user = User(name="Clara", email="clara@example.com", telegram_chat_id="1")
     session.add(user)
     session.flush()
@@ -27,6 +27,7 @@ def _make_user(session, roles=ROLES, remote_preference="remote") -> User:
             user_id=user.id,
             desired_roles=list(roles),
             remote_preference=remote_preference,
+            languages=list(languages) if languages is not None else [],
             notification_score_threshold=75.0,
         )
     )
@@ -41,7 +42,9 @@ def _make_job(
     job = Job(
         title=title,
         company="acme",
-        location="Remote",
+        location="Berlin",
+        # nao "Remote": is_eligible tambem le a localizacao, entao um default
+        # remoto mascararia o corte de vaga presencial nos testes
         country=None,
         remote=remote,
         salary=None,
@@ -107,14 +110,98 @@ def test_exact_role_phrase_in_title_outranks_scattered_token_match(session):
     )
 
 
-def test_non_remote_job_is_penalized_when_user_wants_remote(session):
+def test_non_remote_job_is_ineligible_when_user_wants_remote(session):
     user = _make_user(session, remote_preference="remote")
-    remote_job = _make_job(session, "Product Manager", external_id="a", remote=True)
-    onsite_job = _make_job(session, "Product Manager", external_id="b", remote=False)
+    onsite = _make_job(session, "Product Manager", external_id="b", remote=False)
 
-    assert relevance_score(remote_job, _profile(session, user)) > relevance_score(
-        onsite_job, _profile(session, user)
+    assert is_eligible(onsite, _profile(session, user)) == (False, "nao_remota")
+
+
+def test_non_remote_job_is_eligible_when_user_accepts_any(session):
+    user = _make_user(session, remote_preference="any")
+    onsite = _make_job(session, "Product Manager", remote=False)
+
+    assert is_eligible(onsite, _profile(session, user))[0] is True
+
+
+def test_remote_in_location_overrides_a_false_remote_flag(session):
+    """Medido em 348 vagas reais: 8 vinham com remote=False e localizacao dizendo
+    'Berlin, Remote' ou 'Remote-United Kingdom'."""
+    user = _make_user(session, remote_preference="remote")
+    job = _make_job(session, "Product Manager", remote=False)
+    job.location = "Remote-United Kingdom"
+    session.commit()
+
+    assert is_eligible(job, _profile(session, user))[0] is True
+
+
+def test_job_requiring_undeclared_language_is_ineligible(session):
+    user = _make_user(session, languages=["Portugues", "Ingles"])
+    job = _make_job(
+        session,
+        "Product Manager (m/w/d)",
+        description="Sehr gute Deutschkenntnisse in Wort und Schrift.",
     )
+
+    assert is_eligible(job, _profile(session, user)) == (False, "exige_german")
+
+
+def test_job_requiring_a_declared_language_stays_eligible(session):
+    """Quem fala alemao nao pode perder vaga alema."""
+    user = _make_user(session, languages=["Portugues", "Ingles", "Alemao"])
+    job = _make_job(session, "Product Manager (m/w/d)", description="Deutschkenntnisse.")
+
+    assert is_eligible(job, _profile(session, user))[0] is True
+
+
+def test_portuguese_and_english_jobs_are_never_cut_by_language(session):
+    user = _make_user(session, languages=["Portugues", "Ingles"])
+    for description in (
+        "Fluent English required. Remote-first team.",
+        "Vaga para atuacao remota, exige portugues fluente.",
+    ):
+        job = _make_job(
+            session, "Product Manager", external_id=description[:20], description=description
+        )
+        assert is_eligible(job, _profile(session, user))[0] is True, description
+
+
+def test_english_gender_marker_does_not_count_as_german_requirement(session):
+    """'(m/f/d)' e a variante inglesa do marcador alemao e aparece em anuncio
+    escrito em ingles - so '(m/w/d)' indica anuncio em alemao."""
+    user = _make_user(session, languages=["Portugues", "Ingles"])
+    job = _make_job(
+        session,
+        "Senior Product Manager - Operations (m/f/d)",
+        description="We are looking for a product manager. English is our working language.",
+    )
+
+    assert is_eligible(job, _profile(session, user))[0] is True
+
+
+def test_language_cut_is_disabled_when_profile_declares_no_languages(session):
+    """Perfil incompleto nao pode zerar a fila."""
+    user = _make_user(session, languages=[])
+    job = _make_job(session, "Product Manager (m/w/d)", description="Deutschkenntnisse.")
+
+    assert is_eligible(job, _profile(session, user))[0] is True
+
+
+def test_select_drops_non_remote_and_wrong_language_jobs(session):
+    user = _make_user(session, languages=["Portugues", "Ingles"], remote_preference="remote")
+    keeper = _make_job(session, "Product Manager", external_id="ok", remote=True)
+    _make_job(session, "Product Owner", external_id="onsite", remote=False)
+    _make_job(
+        session,
+        "Product Manager (m/w/d)",
+        external_id="de",
+        remote=True,
+        description="Deutschkenntnisse erforderlich.",
+    )
+
+    selected = select_jobs_for_user(session, user, limit=30)
+
+    assert [job.id for job in selected] == [keeper.id]
 
 
 def test_single_generic_token_in_title_does_not_qualify(session):
