@@ -112,19 +112,6 @@ def _tokens(text: str | None) -> set[str]:
     }
 
 
-def is_remote(job: Job) -> bool:
-    """Se a vaga e remota, olhando tambem a localizacao.
-
-    O flag `remote` do Arbeitnow e majoritariamente honesto, mas medindo 348
-    vagas reais (02/08/2026) 8 vinham com remote=False e localizacao dizendo o
-    contrario ("Berlin, Remote", "Remote-United Kingdom"). Como o corte de
-    remoto e eliminatorio, um falso negativo aqui custa uma vaga boa.
-    """
-    if job.remote:
-        return True
-    return "remote" in _normalize(job.location) or "home office" in _normalize(job.location)
-
-
 def speaks(profile: Profile, language: str) -> bool:
     """Se o usuario declarou a lingua em Profile.languages (comparacao por alias)."""
     declared = " ".join(_normalize(entry) for entry in (profile.languages or []))
@@ -156,7 +143,10 @@ def is_eligible(job: Job, profile: Profile) -> tuple[bool, str]:
     tira a vaga da fila, por melhor que fosse a aderencia de cargo. Retorna
     tambem o motivo, para o log dizer por que a fila encolheu.
     """
-    if profile.remote_preference == "remote" and not is_remote(job):
+    # Deliberadamente so o flag `remote` da fonte, nunca inferido da localizacao
+    # (decisao da Clara, 02/08/2026): "Berlin, Remote" costuma ser hibrido
+    # presencial, e o custo do falso positivo e ela receber vaga que nao serve.
+    if profile.remote_preference == "remote" and not job.remote:
         return False, "nao_remota"
 
     language = requires_unavailable_language(job, profile)

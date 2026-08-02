@@ -124,15 +124,15 @@ def test_non_remote_job_is_eligible_when_user_accepts_any(session):
     assert is_eligible(onsite, _profile(session, user))[0] is True
 
 
-def test_remote_in_location_overrides_a_false_remote_flag(session):
-    """Medido em 348 vagas reais: 8 vinham com remote=False e localizacao dizendo
-    'Berlin, Remote' ou 'Remote-United Kingdom'."""
+def test_remote_in_location_does_not_make_an_onsite_job_eligible(session):
+    """So o flag `remote` da fonte vale. 'Berlin, Remote' costuma ser hibrido
+    presencial - decisao da Clara em 02/08/2026, apos ver o trade-off."""
     user = _make_user(session, remote_preference="remote")
     job = _make_job(session, "Product Manager", remote=False)
     job.location = "Remote-United Kingdom"
     session.commit()
 
-    assert is_eligible(job, _profile(session, user))[0] is True
+    assert is_eligible(job, _profile(session, user)) == (False, "nao_remota")
 
 
 def test_job_requiring_undeclared_language_is_ineligible(session):

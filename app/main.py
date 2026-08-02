@@ -9,6 +9,7 @@ from app.crawler.arbeitnow import ArbeitnowCrawler
 from app.crawler.greenhouse import GreenhouseCrawler
 from app.crawler.remoteok import RemoteOKCrawler
 from app.crawler.runner import CrawlerRunner
+from app.crawler.weworkremotely import WeWorkRemotelyCrawler
 from app.database.database import SessionLocal
 from app.database.models import User
 from app.logging_config import configure_logging
@@ -18,6 +19,12 @@ from app.services.job_matching import select_jobs_for_user
 from app.services.notification_service import notify_user_about_job
 
 logger = logging.getLogger(__name__)
+
+WWR_LOOKBACK_HOURS = 24 * 14
+# Janela maior so para o WeWorkRemotely. As fontes agregadoras despejam centenas
+# de vagas por dia e 48h ja e muito; o WWR e um board curado de baixo volume, onde
+# a vaga fica aberta por semanas - com 48h so 4 dos ~95 itens do feed entravam.
+# Reprocessamento nao e risco: o dedup por (source, external_id) ja barra repetido.
 
 MAX_JOBS_PER_RUN = 30
 # Teto de vagas analisadas por disparo, por usuario, independente de quantos
@@ -57,9 +64,15 @@ def run_once() -> None:
     """
     session = SessionLocal()
     try:
-        # Arbeitnow + RemoteOK rodam sempre: busca abrangente, sem depender de lista de
-        # empresas (ver docs/po-backlog.md). GreenhouseCrawler entra por empresa, se configurado.
-        crawlers: list = [ArbeitnowCrawler(lookback_hours=48), RemoteOKCrawler(lookback_hours=48)]
+        # Arbeitnow + RemoteOK + WeWorkRemotely rodam sempre: busca abrangente, sem depender
+        # de lista de empresas (ver docs/po-backlog.md). GreenhouseCrawler entra por empresa,
+        # se configurado. WWR entrou em 02/08/2026 por ser a unica das tres com categoria de
+        # produto: Arbeitnow e ~91% presencial e alemao, RemoteOK e quase so engenharia.
+        crawlers: list = [
+            ArbeitnowCrawler(lookback_hours=48),
+            RemoteOKCrawler(lookback_hours=48),
+            WeWorkRemotelyCrawler(lookback_hours=WWR_LOOKBACK_HOURS),
+        ]
         crawlers += [GreenhouseCrawler(board_token=t) for t in settings.greenhouse_board_tokens]
         CrawlerRunner(crawlers).run(session)
 
